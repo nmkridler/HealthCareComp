@@ -1,0 +1,1 @@
+These routines parse the csv files for the Heritage Health Care Competition.  They quickly generate user profiles that can be read easily into R for faster data analysis.
