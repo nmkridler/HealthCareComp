@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "csvfile.h"
+#include "pcgdsfs.h"
 
 int main( int argc, char** argv)
 {
@@ -11,19 +12,15 @@ int main( int argc, char** argv)
    // Create a vector of strings pointing to the various
    // lists of categories
    std::vector<std::string> categories;
-   categories.push_back(directory+"categories/AgeAtFirstClaim.txt");
-   categories.push_back(directory+"categories/Sex.txt");
-   categories.push_back(directory+"categories/LengthOfStay.txt");
+   categories.push_back(directory+"categories/DSFS.txt");
    categories.push_back(directory+"categories/PrimaryConditionGroup.txt");
-   categories.push_back(directory+"categories/CharlsonIndex.txt");
-   categories.push_back(directory+"categories/SupLOS.txt");
 
-   std::string dataFile(directory+"filtered/sort_nostayData_y1.csv");
+   std::string dataFile(directory+"pcgdsfsY2_dih.csv");
   
 
    // Create the parser
-   csvfile csv(dataFile,categories);
+   pcgdsfs csv(dataFile,categories[0],categories[1]);
+   csv.combinations();
    csv.parseFile();
-
 }
 
