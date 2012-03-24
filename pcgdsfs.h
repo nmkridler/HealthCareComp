@@ -60,6 +60,7 @@ class pcgdsfs
          if( !inFile ) return false;
 
          std::string tmpStr;
+         getline(inFile,tmpStr);
          while( getline(inFile,tmpStr) )
          {
             // Tokenize the line
@@ -92,7 +93,7 @@ class pcgdsfs
          buildMatrix(m_h0Member, m_h0Mat);
 
          // Write to file
-         writeToFile();
+         //writeToFile();
          return true;
       } 
  
@@ -120,6 +121,68 @@ class pcgdsfs
           
       }
 
+      std::vector<double> const & H0Matrix(){ return m_h0Mat; }
+      std::vector<double> const & H1Matrix(){ return m_h1Mat; }
+
+      void createMetrics( std::vector<double> const & ratio )
+      {
+         m_mean.assign(m_h0Member.size() + m_h1Member.size(),0.);
+         m_max.assign(m_h0Member.size() + m_h1Member.size(),0.);
+         parseMember(ratio,m_h0Member,0);
+         parseMember(ratio,m_h1Member,m_h0Member.size());
+      }
+      
+      void parseMember( std::vector<double> const & ratio,
+                        strMap              const & member,
+                        size_t              const & offset)
+      {
+         strMap::const_iterator mIter = member.begin();
+         int npts = static_cast<int>(m_comboIdx.size()); 
+         size_t memIdx = offset;
+         while( mIter != member.end() )
+         {
+            // For this member, loop over the claims
+            double combos = 0;
+            for( size_t i = 0; i < mIter->second.size(); ++i)
+            {
+               for( size_t j = i; j < mIter->second.size(); ++j)
+               {
+                  int idx = m_comboIdx[mIter->second[i]];
+                  int jdx = m_comboIdx[mIter->second[j]];
+                  int index = jdx + idx*npts;
+                  m_mean[memIdx] += ratio[index];
+                  if( ratio[index] > m_max[memIdx] ) m_max[memIdx] = ratio[index];
+                  combos += 1.0;
+               }
+            }
+            m_mean[memIdx] /= combos;
+            ++memIdx;
+            ++mIter;
+         }
+      }
+
+      void writeMetricsToFile( std::string const & filename)
+      {
+         std::ofstream outfile;
+         outfile.open(filename.c_str());
+         outfile << "memberid,pcgmean,pcgmax,dih" << std::endl;
+         strMap::const_iterator mIter = m_h0Member.begin();
+         size_t idx = 0;
+         while( mIter != m_h0Member.end() )
+         {
+            outfile << mIter->first << "," << m_mean[idx] << "," << m_max[idx] << ",0" << std::endl;
+            ++idx;
+            ++mIter;
+         }
+         mIter = m_h1Member.begin();
+         while( mIter != m_h1Member.end() )
+         {
+            outfile << mIter->first << "," << m_mean[idx] << "," << m_max[idx] << ",1" << std::endl;
+            ++idx;
+            ++mIter;
+         }
+         outfile.close();
+      }
    private:
       std::string                m_fileName;  ///< Data file name
       std::string                m_dsfsFile;  ///< Data file name
@@ -132,6 +195,10 @@ class pcgdsfs
       strMap                     m_h1Member;    ///< Member map
       categoryMap                m_comboIdx;  ///< Combos
 
+      // Stats
+      std::vector<double>        m_mean;
+      std::vector<double>        m_max;
+
       // Build the adjacency matrix
       void buildMatrix(strMap              const & member,
                        std::vector<double>       & matrix)
@@ -141,6 +208,7 @@ class pcgdsfs
          while( mIter != member.end() )
          {
             // For this member, loop over the claims
+            std::map<int,int> indexMap;
             for( size_t i = 0; i < mIter->second.size(); ++i)
             {
                for( size_t j = i; j < mIter->second.size(); ++j)
@@ -148,8 +216,15 @@ class pcgdsfs
                   int idx = m_comboIdx[mIter->second[i]];
                   int jdx = m_comboIdx[mIter->second[j]];
                   int index = jdx + idx*npts;
-                  matrix[index] += 1.0;
+                  indexMap[index] = index;
                }
+            }
+            // Now loop over the index map
+            std::map<int,int>::iterator iter = indexMap.begin();
+            while( iter != indexMap.end() )
+            {
+               matrix[iter->second] += 1;
+               ++iter;
             }
             ++mIter;
          }
