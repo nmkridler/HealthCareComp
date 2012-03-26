@@ -1,5 +1,5 @@
-#ifndef __pcgdsfsfile_h__
-#define __pcgdsfsfile_h__
+#ifndef __pcgdsfsy3file_h__
+#define __pcgdsfsy3file_h__
 
 #include <iostream>
 #include <fstream>
@@ -12,15 +12,15 @@
 typedef std::vector<std::string>      strList;
 typedef std::map<std::string,strList> strMap;
 
-class pcgdsfs
+class pcgdsfsY3
 {
    public:
       // Constructor
-      pcgdsfs(std::string &csvName,
-              std::string &dsfsFile,
-              std::string &pcgFile) : m_fileName(csvName),
-                                      m_dsfsFile(dsfsFile),
-                                      m_pcgFile(pcgFile)
+      pcgdsfsY3(std::string &csvName,
+                std::string &dsfsFile,
+                std::string &pcgFile) : m_fileName(csvName),
+                                        m_dsfsFile(dsfsFile),
+                                        m_pcgFile(pcgFile)
       {
          // Go through the list of categories
          m_dsfs.reset(new category( m_dsfsFile, 0 ));
@@ -28,7 +28,7 @@ class pcgdsfs
       }
 
       // Destructor
-      ~pcgdsfs(){}
+      ~pcgdsfsY3(){}
 
       // Create all of the combinations of pcg,dsfs
       void combinations()
@@ -48,10 +48,7 @@ class pcgdsfs
                idx++;
             }
          }
-         // Initialize the adjacency matrices
-         m_h0Mat.assign(m_comboIdx.size()*m_comboIdx.size(),0.);
-         m_h1Mat.assign(m_comboIdx.size()*m_comboIdx.size(),0.);
-
+         m_matrix.assign(m_comboIdx.size()*m_comboIdx.size(),0.);
       }
 
       // Parse the file
@@ -79,58 +76,38 @@ class pcgdsfs
             }
             // Join the dsfs and pcg
             std::string tmp(strVector[1]+","+strVector[2]);
-            if( std::atoi(strVector[3].c_str()) > 0 )
-            {
-               m_h1Member[strVector[0]].push_back(tmp);
-            } else
-            {
-               m_h0Member[strVector[0]].push_back(tmp);
-            }
+            m_member[strVector[0]].push_back(tmp);
          } 
          inFile.close();
-
-         // Call build matrix
-         buildMatrix(m_h1Member, m_h1Mat);
-         buildMatrix(m_h0Member, m_h0Mat);
-
+         buildMatrix(m_member,m_matrix);
          // Write to file
          writeToFile();
          return true;
       } 
  
-
       void writeToFile()
       {
          std::ofstream outFileH0;
-         std::ofstream outFileH1;
-         outFileH0.open("adjacencyH0.csv");
-         outFileH1.open("adjacencyH1.csv");
+         outFileH0.open("adjacencyY3.csv");
 
          size_t npts = m_comboIdx.size();
          for( size_t i = 0; i < npts; ++i)
          {
             for( size_t j = 0; j < npts-1; ++j)
             {
-               outFileH0 << m_h0Mat[j + i*npts] <<",";
-               outFileH1 << m_h1Mat[j + i*npts] <<",";
+               outFileH0 << m_matrix[j + i*npts] <<",";
             }
-            outFileH0 << m_h0Mat[(i+1)*npts - 1] << std::endl;
-            outFileH1 << m_h1Mat[(i+1)*npts - 1] << std::endl;
+            outFileH0 << m_matrix[(i+1)*npts - 1] << std::endl;
          }
          outFileH0.close();
-         outFileH1.close();
           
       }
 
-      std::vector<double> const & H0Matrix(){ return m_h0Mat; }
-      std::vector<double> const & H1Matrix(){ return m_h1Mat; }
-
       void createMetrics( std::vector<double> const & ratio )
       {
-         m_mean.assign(m_h0Member.size() + m_h1Member.size(),0.);
-         m_max.assign(m_h0Member.size() + m_h1Member.size(),0.);
-         parseMember(ratio,m_h0Member,0);
-         parseMember(ratio,m_h1Member,m_h0Member.size());
+         m_mean.assign(m_member.size(),0.);
+         m_max.assign(m_member.size(),0.);
+         parseMember(ratio,m_member,0);
       }
       
       void parseMember( std::vector<double> const & ratio,
@@ -151,15 +128,10 @@ class pcgdsfs
                {
                   int idx = m_comboIdx[mIter->second[i]];
                   int jdx = m_comboIdx[mIter->second[j]];
-                  if( jdx%m_ndsfs > 1 )
-                  {
-                     // idx,0 represents the unknown time
-                     // move anything greater than idx,1 to idx,2
+                  if( jdx%m_ndsfs > 1)
                      jdx -= (jdx%m_ndsfs - 2);
-                  }
-                  if( idx%m_ndsfs > 0 )
-                    idx -= (idx%m_ndsfs - 1);
-
+                  if( idx%m_ndsfs > 0)
+                     idx -= (idx%m_ndsfs - 1);          
                   if( idx%m_ndsfs != 0 && jdx%m_ndsfs != 0 )
                   {
                      int index = jdx + idx*npts;
@@ -175,10 +147,11 @@ class pcgdsfs
                m_mean[memIdx] += ratio[iter->second];
                if( ratio[iter->second] > m_max[memIdx] ) 
                   m_max[memIdx] = ratio[iter->second];
-               if( ratio[iter->second] > 0 ) combos += 1.0;
+               if(ratio[iter->second] > 0 ) combos += 1.0;
                ++iter;
             }
             if( combos > 0 ) m_mean[memIdx] /= combos;
+          
             ++memIdx;
             ++mIter;
          }
@@ -188,19 +161,12 @@ class pcgdsfs
       {
          std::ofstream outfile;
          outfile.open(filename.c_str());
-         outfile << "memberid,pcgmean,pcgmax,dih" << std::endl;
-         strMap::const_iterator mIter = m_h0Member.begin();
+         outfile << "memberid,pcgmean,pcgmax" << std::endl;
+         strMap::const_iterator mIter = m_member.begin();
          size_t idx = 0;
-         while( mIter != m_h0Member.end() )
+         while( mIter != m_member.end() )
          {
-            outfile << mIter->first << "," << m_mean[idx] << "," << m_max[idx] << ",0" << std::endl;
-            ++idx;
-            ++mIter;
-         }
-         mIter = m_h1Member.begin();
-         while( mIter != m_h1Member.end() )
-         {
-            outfile << mIter->first << "," << m_mean[idx] << "," << m_max[idx] << ",1" << std::endl;
+            outfile << mIter->first << "," << m_mean[idx] << "," << m_max[idx] << std::endl;
             ++idx;
             ++mIter;
          }
@@ -212,17 +178,15 @@ class pcgdsfs
       std::string                m_pcgFile;   ///< Data file name
       categoryPtr                m_pcg;       ///< Category Objects
       categoryPtr                m_dsfs;      ///< Category Objects
-      std::vector<double>        m_h0Mat;     ///< H0 adjacency matrix
-      std::vector<double>        m_h1Mat;     ///< H1 adjacency matrix
-      strMap                     m_h0Member;    ///< Member map
-      strMap                     m_h1Member;    ///< Member map
+      strMap                     m_member;    ///< Member map
       categoryMap                m_comboIdx;  ///< Combos
       int                        m_ndsfs;
+      std::vector<double>        m_matrix;     
       // Stats
       std::vector<double>        m_mean;
       std::vector<double>        m_max;
 
-      // Build the adjacency matrix
+     // Build the adjacency matrix
       void buildMatrix(strMap              const & member,
                        std::vector<double>       & matrix)
       {
